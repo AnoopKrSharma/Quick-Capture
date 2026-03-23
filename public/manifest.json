@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Quick Screenshot Capture",
+  "description": "Capture screenshots quickly and export to Word or PowerPoint.",
+  "version": "1.0.0",
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "Quick Capture"
+  },
+  "permissions": ["activeTab", "downloads", "tabs", "storage"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  }
+}
