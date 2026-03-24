@@ -287,10 +287,39 @@ export default function App() {
     });
   };
 
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (isBusy) return;
+      if (event.repeat) return;
+
+      const key = event.key.toLowerCase();
+      if (key === "s") {
+        event.preventDefault();
+        if (!isSessionActive) {
+          handleStartCapture();
+        }
+      } else if (key === "c") {
+        event.preventDefault();
+        if (isSessionActive) {
+          handleCapture();
+        }
+      } else if (key === "e") {
+        event.preventDefault();
+        if (isSessionActive && !isEmpty) {
+          handleEnd();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isBusy, isEmpty, isSessionActive]);
+
   return (
     <main className="app">
       <h1>Quick Capture</h1>
       <p className="subtitle">Capture screenshots fast and export at the end.</p>
+      <p className="hint">Shortcuts: S = Start, C = Capture, E = End & Download</p>
 
       <div className="card">
         <label htmlFor="fileType">Export format</label>

@@ -26,6 +26,12 @@ h1 {
   font-size: 13px;
 }
 
+.hint {
+  margin: 0 0 12px;
+  color: #334155;
+  font-size: 12px;
+}
+
 .card {
   display: flex;
   flex-direction: column;
