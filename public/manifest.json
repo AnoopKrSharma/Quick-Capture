@@ -7,9 +7,35 @@
     "default_popup": "index.html",
     "default_title": "Quick Capture"
   },
-  "permissions": ["activeTab", "downloads", "tabs", "storage"],
+  "permissions": ["activeTab", "downloads", "tabs", "storage", "notifications"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
+  },
+  "commands": {
+    "start-capture": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y"
+      },
+      "description": "Start capture and take first screenshot"
+    },
+    "capture-shot": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+U"
+      },
+      "description": "Capture next screenshot"
+    },
+    "finish-capture-download": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+O"
+      },
+      "description": "End capture and download document"
+    },
+    "toggle-format": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+P"
+      },
+      "description": "Toggle export format between Word and PowerPoint"
+    }
   }
 }

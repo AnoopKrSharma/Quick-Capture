@@ -7,6 +7,8 @@ const FILE_TYPE = {
   WORD: "word",
   PPT: "ppt"
 };
+const CAPTURE_MIN_INTERVAL_MS = 1200;
+let lastCaptureAt = 0;
 
 function timestamp() {
   const now = new Date();
@@ -14,24 +16,44 @@ function timestamp() {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function captureCurrentTab() {
-  return new Promise((resolve, reject) => {
-    // Captures only visible viewport of the currently active tab.
-    chrome.tabs.captureVisibleTab(
-      undefined,
-      {
-        format: "png"
-      },
-      (dataUrl) => {
-        const err = chrome.runtime.lastError;
-        if (err) {
-          reject(new Error(err.message));
-          return;
+  // Chrome enforces a per-second capture quota; throttle to avoid quota errors.
+  const waitMs = Math.max(0, CAPTURE_MIN_INTERVAL_MS - (Date.now() - lastCaptureAt));
+  if (waitMs > 0) {
+    await sleep(waitMs);
+  }
+
+  try {
+    const dataUrl = await new Promise((resolve, reject) => {
+      // Captures only visible viewport of the currently active tab.
+      chrome.tabs.captureVisibleTab(
+        undefined,
+        {
+          format: "png"
+        },
+        (nextDataUrl) => {
+          const err = chrome.runtime.lastError;
+          if (err) {
+            reject(new Error(err.message));
+            return;
+          }
+          resolve(nextDataUrl);
         }
-        resolve(dataUrl);
-      }
-    );
-  });
+      );
+    });
+    lastCaptureAt = Date.now();
+    return dataUrl;
+  } catch (error) {
+    if ((error?.message || "").includes("MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND")) {
+      await sleep(CAPTURE_MIN_INTERVAL_MS);
+      return captureCurrentTab();
+    }
+    throw error;
+  }
 }
 
 async function getActiveTabUrl() {
@@ -84,7 +106,17 @@ function fitInside(width, height, maxWidth, maxHeight) {
 
 async function downloadBlob(blob, filename, mimeType) {
   const payload = mimeType ? new Blob([blob], { type: mimeType }) : blob;
-  const url = URL.createObjectURL(payload);
+  
+  // Convert blob to data URL for Service Worker context
+  const arrayBuffer = await payload.arrayBuffer();
+  const uint8Array = new Uint8Array(arrayBuffer);
+  let binaryString = '';
+  for (let i = 0; i < uint8Array.length; i++) {
+    binaryString += String.fromCharCode(uint8Array[i]);
+  }
+  const base64 = btoa(binaryString);
+  const url = `data:${payload.type || 'application/octet-stream'};base64,${base64}`;
+  
   await new Promise((resolve, reject) => {
     chrome.downloads.download(
       {
@@ -211,8 +243,22 @@ export default function App() {
         // If persistence fails for any reason, fall back to fresh UI state.
       }
     })();
+
+    // Listen for notifications from background service worker
+    const handleMessage = (message) => {
+      if (message.type === "notification") {
+        setError(message.message);
+        // Auto-clear success messages after 3 seconds
+        if (message.message.includes("successfully")) {
+          setTimeout(() => setError(""), 3000);
+        }
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(handleMessage);
     return () => {
       cancelled = true;
+      chrome.runtime.onMessage.removeListener(handleMessage);
     };
   }, []);
 
@@ -287,39 +333,11 @@ export default function App() {
     });
   };
 
-  useEffect(() => {
-    const onKeyDown = (event) => {
-      if (isBusy) return;
-      if (event.repeat) return;
-
-      const key = event.key.toLowerCase();
-      if (key === "s") {
-        event.preventDefault();
-        if (!isSessionActive) {
-          handleStartCapture();
-        }
-      } else if (key === "c") {
-        event.preventDefault();
-        if (isSessionActive) {
-          handleCapture();
-        }
-      } else if (key === "e") {
-        event.preventDefault();
-        if (isSessionActive && !isEmpty) {
-          handleEnd();
-        }
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isBusy, isEmpty, isSessionActive]);
-
   return (
     <main className="app">
       <h1>Quick Capture</h1>
       <p className="subtitle">Capture screenshots fast and export at the end.</p>
-      <p className="hint">Shortcuts: S = Start, C = Capture, E = End & Download</p>
+      <p className="hint">Global shortcuts: set/edit in chrome://extensions/shortcuts</p>
 
       <div className="card">
         <label htmlFor="fileType">Export format</label>
